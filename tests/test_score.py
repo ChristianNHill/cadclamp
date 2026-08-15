@@ -27,6 +27,15 @@ def test_good_cube_scores_high(good_cube):
     assert len(card.checks) == 3
 
 
+def test_fail_band_caps_composite(mushroom):
+    card = score_mesh(mushroom, part="mushroom")
+    assert not card.gated_out
+    overhang = next(c for c in card.checks if c.check == "overhang")
+    assert overhang.band == "fail"
+    # a hard overhang fail must not read as a near-perfect part
+    assert card.printability <= 0.5
+
+
 def test_soup_gated_out(open_soup):
     card = score_mesh(open_soup, part="soup")
     assert card.gated_out

@@ -2,6 +2,16 @@ from __future__ import annotations
 
 import math
 
+from cadclamp.engine.types import FAIL, WARN
+
+# A hard DfM violation must show in the headline number, not hide behind a high
+# geometric mean of the other checks. A single fail-band check (e.g. a small
+# but genuinely unprintable overhang region) caps the composite at FAIL_CAP; a
+# warn-band check with no fails caps it at WARN_CAP. The geometric mean still
+# governs everything below the cap.
+FAIL_CAP = 0.5
+WARN_CAP = 0.85
+
 
 def two_tier_index(measured: float, feasible: float, recommended: float) -> float:
     """Map a measured dimension to [0, 1] against a (feasible, recommended) pair.
@@ -35,3 +45,12 @@ def weighted_geometric_mean(indices: dict[str, float], weights: dict[str, float]
         acc += w * math.log(v)
         total_w += w
     return math.exp(acc / total_w)
+
+
+def band_cap(bands: list[str]) -> float:
+    """Ceiling the composite may not exceed, given the checks' worst band."""
+    if FAIL in bands:
+        return FAIL_CAP
+    if WARN in bands:
+        return WARN_CAP
+    return 1.0

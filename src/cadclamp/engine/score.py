@@ -6,7 +6,7 @@ from typing import Any
 import trimesh
 
 from cadclamp.engine.checks import check_min_wall, check_overhang, check_stability
-from cadclamp.engine.composite import weighted_geometric_mean
+from cadclamp.engine.composite import band_cap, weighted_geometric_mean
 from cadclamp.engine.gates import load_mesh, run_gates
 from cadclamp.engine.types import FAIL, ReportCard
 
@@ -41,7 +41,8 @@ def score_mesh(
         check_overhang(mesh, layer_mm=process["layer_mm"]),
         check_stability(mesh),
     ]
-    card.printability = weighted_geometric_mean({c.check: c.index for c in card.checks})
+    raw = weighted_geometric_mean({c.check: c.index for c in card.checks})
+    card.printability = min(raw, band_cap([c.band for c in card.checks]))
     return card
 
 
