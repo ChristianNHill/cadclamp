@@ -1,0 +1,17 @@
+NOTICE REGARDING MODEL-GENERATED OUTPUTS
+
+Benchmark result artifacts published by CADClamp (generated CAD programs,
+STL/STEP geometry, and evaluation logs) were produced by third-party AI
+models via each provider's API under that provider's then-current terms of
+service. CADClamp publishes them solely for benchmark transparency and
+reproducibility.
+
+Users of this data are independently responsible for ensuring that any
+downstream use — in particular training or fine-tuning machine-learning
+models — complies with each output-generating provider's terms, including
+restrictions on developing or training competing models. CADClamp makes no
+representation that such downstream uses are permitted.
+
+Prompts, reference geometry, scoring code, and leaderboard aggregates are
+CADClamp's own work and are licensed under LICENSE (code, Apache-2.0) and
+LICENSE-DATA (data, CDLA-Permissive-2.0) respectively.

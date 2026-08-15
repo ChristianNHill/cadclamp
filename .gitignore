@@ -1,0 +1,25 @@
+# secrets — never tracked
+.env
+.env.*
+*.pem
+*.key
+secrets*
+
+# virtualenvs and caches
+.venv/
+.venv-exec/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.DS_Store
+
+# local artifacts and run outputs (results data ships separately)
+demo_parts/
+logs/
+
+# build-process documents — about how the project was made, not the project
+CLAUDE.md
+docs/BUILD_PLAN.md
+docs/build-plan.html
+docs/research/
