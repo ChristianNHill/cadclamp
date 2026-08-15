@@ -69,12 +69,16 @@ solid should be 2. Every slicer repairs it at load without telling you, which is
 why nobody notices. CADClamp is a validator, not a slicer, so it reports the
 defect with a typed failure code instead of fixing it for you.
 
-Be precise about what that flag means. For a case like Benchy it is not telling you
-to go repair your mesh. This is the class of defect a modern slicer closes by itself
-at load, so the part prints anyway. The flag records that the file is not a valid
-solid as shipped, not a task you have to do before printing. It counts when you are
-feeding the file to something that is not a slicer, or when the non-closure comes
-from a real modelling mistake rather than a benign export artifact.
+The engine draws that line itself. A benign defect like a few missing faces is
+closed by a light repair at the valid-solid gate (weld, fix winding, fill holes),
+and the part is scored on the repaired mesh with a `repaired` flag. Benchy is a
+harder case: its defects are non-manifold edges, not holes, so light repair cannot
+close it and only a slicer's per-layer approach recovers it. The engine still marks
+it not a valid solid, but tags it `slicer_recoverable`, which separates "a slicer
+would print this" from degenerate output. For a case like Benchy the flag is a
+record that the file is not a solid as shipped, not a task you have to do before
+printing. It counts when you feed the file to something that is not a slicer, or
+when the non-closure comes from a modelling mistake rather than an export artifact.
 
 Two limits the same runs exposed, both on the roadmap: bridges are currently
 scored as overhangs (conservative, since a short bridge prints fine; span-aware
