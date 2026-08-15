@@ -69,6 +69,14 @@ solid should be 2. Every slicer repairs it at load without telling you, which is
 why nobody notices. CADClamp is a validator, not a slicer, so it reports the
 defect with a typed failure code instead of fixing it for you.
 
+It is worth being precise about what that flag means. For a case like Benchy it is
+not telling you to go repair your mesh. This is exactly the class of defect a modern
+slicer closes by itself at load, so the part prints anyway. The flag records that
+the file is not a valid solid as shipped, which is the honest thing for a validator
+to say, not a chore you have to do before printing. It matters when you are feeding
+the file to something that is not a slicer, or when the non-closure is a symptom of
+a real modelling mistake rather than a benign export artifact.
+
 Two limits the same runs exposed, both on the roadmap: bridges are currently
 scored as overhangs (conservative, since a short bridge prints fine; span-aware
 scoring comes with the slicer oracles), and the geometric-mean composite is too
