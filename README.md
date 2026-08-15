@@ -69,13 +69,12 @@ solid should be 2. Every slicer repairs it at load without telling you, which is
 why nobody notices. CADClamp is a validator, not a slicer, so it reports the
 defect with a typed failure code instead of fixing it for you.
 
-It is worth being precise about what that flag means. For a case like Benchy it is
-not telling you to go repair your mesh. This is exactly the class of defect a modern
-slicer closes by itself at load, so the part prints anyway. The flag records that
-the file is not a valid solid as shipped, which is the honest thing for a validator
-to say, not a chore you have to do before printing. It matters when you are feeding
-the file to something that is not a slicer, or when the non-closure is a symptom of
-a real modelling mistake rather than a benign export artifact.
+Be precise about what that flag means. For a case like Benchy it is not telling you
+to go repair your mesh. This is the class of defect a modern slicer closes by itself
+at load, so the part prints anyway. The flag records that the file is not a valid
+solid as shipped, not a task you have to do before printing. It counts when you are
+feeding the file to something that is not a slicer, or when the non-closure comes
+from a real modelling mistake rather than a benign export artifact.
 
 Two limits the same runs exposed, both on the roadmap: bridges are currently
 scored as overhangs (conservative, since a short bridge prints fine; span-aware
@@ -258,7 +257,7 @@ The flags exist for the feedback side only. Leaderboard runs always use the
 frozen default profile (0.4 mm nozzle, 0.2 mm layers), so published scores stay
 comparable across models and over time; a score reported at any other setting is
 a diagnostic, not a benchmark number. `--layer` currently sets the first-layer
-band for the overhang check and will matter more once the slicer oracles and the
+band for the overhang check and does more once the slicer oracles and the
 staircase-roughness model land, since both are functions of layer height.
 Material presets (PETG's tighter overhang tolerance, TPU clearances) are planned
 on the same mechanism.
