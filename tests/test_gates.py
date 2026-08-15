@@ -12,10 +12,18 @@ def test_good_cube_passes_gates(good_cube):
     assert results[1].status == PASS
 
 
-def test_open_soup_fails_watertight(open_soup):
+def test_open_soup_is_repaired(open_soup):
+    # two missing faces are simple holes; light repair closes them
     result = gate_valid_solid(open_soup)
+    assert result.status == PASS
+    assert result.code == "repaired" or result.detail.get("repaired")
+
+
+def test_nonmanifold_fails_but_is_slicer_recoverable(nonmanifold):
+    result = gate_valid_solid(nonmanifold)
     assert result.status == FAIL
-    assert result.code == "not_watertight"
+    assert result.code in ("not_watertight", "bad_winding")
+    assert result.detail.get("slicer_recoverable") is True
 
 
 def test_empty_mesh_is_degenerate():
@@ -25,7 +33,7 @@ def test_empty_mesh_is_degenerate():
     assert result.code == "no_output"
 
 
-def test_gates_stop_at_first_failure(open_soup):
-    results = run_gates(open_soup)
+def test_gates_stop_at_first_failure(nonmanifold):
+    results = run_gates(nonmanifold)
     assert results[-1].status == FAIL
     assert len(results) == 2  # degenerate passed, valid_solid failed, G3 never ran

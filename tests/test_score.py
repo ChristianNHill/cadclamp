@@ -36,10 +36,18 @@ def test_fail_band_caps_composite(mushroom):
     assert card.printability <= 0.5
 
 
-def test_soup_gated_out(open_soup):
+def test_repairable_soup_scores(open_soup):
+    # a benign hole is closed and the part is scored, not zeroed
     card = score_mesh(open_soup, part="soup")
+    assert not card.gated_out
+    assert card.printability > 0.0
+    assert card.checks
+
+
+def test_nonmanifold_gated_out(nonmanifold):
+    card = score_mesh(nonmanifold, part="nm")
     assert card.gated_out
-    assert card.failure_code == "not_watertight"
+    assert card.failure_code in ("not_watertight", "bad_winding")
     assert card.printability == 0.0
     assert card.checks == []
 

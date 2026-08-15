@@ -46,6 +46,18 @@ def tall_pin() -> trimesh.Trimesh:
 
 @pytest.fixture
 def open_soup() -> trimesh.Trimesh:
-    """Cube with two faces deleted: not watertight."""
+    """Cube with two faces deleted: two simple holes a light repair can close."""
     cube = trimesh.creation.box(extents=[10, 10, 10])
     return trimesh.Trimesh(vertices=cube.vertices, faces=cube.faces[:-2], process=False)
+
+
+@pytest.fixture
+def nonmanifold() -> trimesh.Trimesh:
+    """A closed box plus a stray flap sharing one of its edges, giving a
+    non-manifold edge (three faces on one edge). Light repair cannot close it
+    (there is no hole to fill), which is the 3DBenchy class: not a valid solid,
+    but one coherent body a slicer would still print."""
+    box = trimesh.creation.box(extents=[10, 10, 10])
+    verts = np.vstack([box.vertices, [[0.0, 0.0, 20.0]]])
+    faces = np.vstack([box.faces, [[0, 1, len(box.vertices)]]])
+    return trimesh.Trimesh(vertices=verts, faces=faces, process=False)

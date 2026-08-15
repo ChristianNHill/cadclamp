@@ -7,7 +7,7 @@ import trimesh
 
 from cadclamp.engine.checks import check_min_wall, check_overhang, check_stability
 from cadclamp.engine.composite import band_cap, weighted_geometric_mean
-from cadclamp.engine.gates import load_mesh, run_gates
+from cadclamp.engine.gates import load_mesh, run_gates_with_mesh
 from cadclamp.engine.types import FAIL, ReportCard
 
 ENGINE_VERSION = "0.1.0"
@@ -29,17 +29,19 @@ def score_mesh(
     process = {**DEFAULT_PROCESS, **(process or {})}
     card = ReportCard(part=part, engine_version=ENGINE_VERSION, process=process)
 
-    card.gates = run_gates(mesh)
+    card.gates, effective = run_gates_with_mesh(mesh)
     failed = next((g for g in card.gates if g.status == FAIL), None)
     if failed is not None:
         card.failure_code = failed.code
         card.printability = 0.0
         return card
 
+    # `effective` is the repaired mesh when a benign defect was closed at the
+    # valid-solid gate, and the original mesh otherwise.
     card.checks = [
-        check_min_wall(mesh, line_width_mm=process["line_width_mm"]),
-        check_overhang(mesh, layer_mm=process["layer_mm"]),
-        check_stability(mesh),
+        check_min_wall(effective, line_width_mm=process["line_width_mm"]),
+        check_overhang(effective, layer_mm=process["layer_mm"]),
+        check_stability(effective),
     ]
     raw = weighted_geometric_mean({c.check: c.index for c in card.checks})
     card.printability = min(raw, band_cap([c.band for c in card.checks]))
