@@ -18,6 +18,7 @@ __pycache__/
 # local artifacts and run outputs (results data ships separately)
 demo_parts/
 logs/
+dist/
 
 # build-process documents — about how the project was made, not the project
 CLAUDE.md
