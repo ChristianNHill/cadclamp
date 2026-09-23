@@ -25,6 +25,10 @@ harness = ["inspect-ai>=0.3"]
 [project.scripts]
 cadclamp = "cadclamp.cli:main"
 
+# Registers the `claudecli/<model>` Inspect provider (subscription-backed Claude).
+[project.entry-points.inspect_ai]
+cadclamp = "cadclamp.claude_cli"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

@@ -5,12 +5,12 @@ from typing import Any
 
 import trimesh
 
-from cadclamp.engine.checks import check_min_wall, check_overhang, check_stability
+from cadclamp.engine.checks import CRITERION_CHECKS, check_min_wall, check_overhang, check_stability
 from cadclamp.engine.composite import band_cap, weighted_geometric_mean
 from cadclamp.engine.gates import load_mesh, run_gates_with_mesh
 from cadclamp.engine.types import FAIL, ReportCard
 
-ENGINE_VERSION = "0.1.0"
+ENGINE_VERSION = "0.2.0"  # capped composite, advisory criterion checks
 
 DEFAULT_PROCESS: dict[str, Any] = {
     "name": "fdm",
@@ -25,6 +25,7 @@ def score_mesh(
     mesh: trimesh.Trimesh,
     part: str = "part",
     process: dict[str, Any] | None = None,
+    criteria: list[str] | None = None,
 ) -> ReportCard:
     process = {**DEFAULT_PROCESS, **(process or {})}
     card = ReportCard(part=part, engine_version=ENGINE_VERSION, process=process)
@@ -43,8 +44,17 @@ def score_mesh(
         check_overhang(effective, layer_mm=process["layer_mm"]),
         check_stability(effective),
     ]
-    raw = weighted_geometric_mean({c.check: c.index for c in card.checks})
-    card.printability = min(raw, band_cap([c.band for c in card.checks]))
+    for name in dict.fromkeys(criteria or []):  # ordered, deduplicated
+        check = CRITERION_CHECKS.get(name)
+        if check is None:
+            continue  # tagged but not implemented yet; the tag is the backlog
+        result = check(effective)
+        result.advisory = True
+        card.checks.append(result)
+
+    graded = [c for c in card.checks if not c.advisory]
+    raw = weighted_geometric_mean({c.check: c.index for c in graded})
+    card.printability = min(raw, band_cap([c.band for c in graded]))
     return card
 
 

@@ -8,6 +8,7 @@ secrets*
 # virtualenvs and caches
 .venv/
 .venv-exec/
+.venv-cq/
 __pycache__/
 *.pyc
 *.egg-info/

@@ -26,6 +26,10 @@ class CheckResult:
     measured: dict[str, Any] = field(default_factory=dict)
     thresholds: dict[str, Any] = field(default_factory=dict)
     convention: str = ""
+    # Criterion checks (bridge_span, fit_clearance, ...) run only on the
+    # prompts that name them, so they are reported and ranked per criterion
+    # but kept out of the composite and its band cap until calibrated.
+    advisory: bool = False
 
 
 @dataclass
