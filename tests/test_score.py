@@ -57,3 +57,35 @@ def test_report_card_serializes(good_cube):
     payload = card.to_json()
     assert "printability" in payload
     assert "min_wall" in payload
+
+
+def test_interface_assertions_find_holes_and_teeth():
+    # empty_cylinder / solid_points / radial_count check where material is,
+    # which bbox, volume and Euler number cannot see (Track C interfaces)
+    import numpy as np
+    import trimesh
+
+    from cadclamp.prompts import check_assertions
+
+    washer = trimesh.creation.annulus(r_min=5.0, r_max=8.0, height=5.0)  # 10 mm bore, z -2.5..2.5
+    ok_bore = {"type": "empty_cylinder", "center": [0, 0, 0], "axis": "z", "diameter": 10.0, "length": 5.0}
+    too_big = {"type": "empty_cylinder", "center": [0, 0, 0], "axis": "z", "diameter": 12.0, "length": 5.0}
+    wall = {"type": "solid_points", "points": [[6.5, 0, 0], [0, -6.5, 0]]}
+    res = check_assertions(washer, [ok_bore, too_big, wall])
+    assert [r["passed"] for r in res] == [True, False, True]
+
+    teeth = trimesh.util.concatenate([
+        trimesh.creation.box([2, 2, 4], transform=trimesh.transformations.rotation_matrix(t, [0, 0, 1])
+                             @ trimesh.transformations.translation_matrix([10, 0, 0]))
+        for t in np.linspace(0, 2 * np.pi, 20, endpoint=False)])
+    count = check_assertions(teeth, [{"type": "radial_count", "center": [0, 0, 0], "axis": "z", "radius": 10.0, "count": 20}])
+    assert count[0]["passed"], count[0]
+
+
+def test_empty_mesh_fails_every_assertion_without_crashing():
+    import trimesh
+
+    from cadclamp.prompts import check_assertions
+
+    results = check_assertions(trimesh.Trimesh(), [{"type": "bbox_mm", "min": [1, 1, 1], "max": [2, 2, 2]}, {"type": "watertight"}])
+    assert [r["passed"] for r in results] == [False, False]
