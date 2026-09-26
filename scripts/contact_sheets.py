@@ -50,7 +50,8 @@ def collect(dirs: list[str]):
     regrader = Regrader()
     sheets = collections.defaultdict(dict)
     for d in dirs:
-        for info in list_eval_logs(d):
+        # oldest first, so a rerun's log overwrites the run it replaced
+        for info in sorted(list_eval_logs(d), key=lambda i: i.name):
             log = read_eval_log(info)
             if log.status != "success" or not log.samples or "mockllm" in log.eval.model:
                 continue
