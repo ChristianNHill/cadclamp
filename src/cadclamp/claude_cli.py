@@ -58,24 +58,39 @@ class ClaudeCLI(ModelAPI):
             # transcript would need re-rendering, which changes the harness.
             raise NotImplementedError("claudecli supports single-shot runs only (attempts=1)")
 
+        # images go in as a stream-json user message (tested 2026-09-25);
+        # text-only prompts keep the plain -p path the bridge validated
+        images = [c for c in turns[0].content if getattr(c, "type", None) == "image"] if isinstance(turns[0].content, list) else []
+        stdin = None
+        if images:
+            blocks = []
+            for c in images:
+                media, data = c.image.split(";base64,", 1)
+                blocks.append({"type": "image", "source": {"type": "base64", "media_type": media.removeprefix("data:"), "data": data}})
+            blocks.append({"type": "text", "text": turns[0].text})
+            stdin = (json.dumps({"type": "user", "message": {"role": "user", "content": blocks}}) + "\n").encode()
+        prompt_args = ["--input-format", "stream-json", "--output-format", "stream-json", "--verbose"] if images else [turns[0].text, "--output-format", "json"]
         cmd = [
-            "claude", "-p", turns[0].text,
+            "claude", "-p", *prompt_args,
             "--model", self.model_name,
             "--system-prompt", system,
             "--tools", "",
             "--setting-sources", "project",
             "--strict-mcp-config",
             "--no-session-persistence",
-            "--output-format", "json",
         ]
         if self.effort:
             cmd += ["--effort", self.effort]
 
         with tempfile.TemporaryDirectory() as cwd:
             proc = await asyncio.create_subprocess_exec(
-                *cmd, cwd=cwd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                *cmd, cwd=cwd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE if stdin else None,
             )
-            out, err = await proc.communicate()
+            out, err = await proc.communicate(stdin)
+        if images:  # stream-json: the last line of type "result" carries the answer
+            lines = [ln for ln in out.decode().splitlines() if '"type":"result"' in ln.replace(" ", "")]
+            out = lines[-1].encode() if lines else out
         try:
             result = json.loads(out)
         except json.JSONDecodeError:

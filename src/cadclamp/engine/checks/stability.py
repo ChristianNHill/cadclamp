@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 import trimesh
-from scipy.spatial import ConvexHull
+from scipy.spatial import ConvexHull, QhullError
 from shapely.geometry import Point, Polygon
 
 from cadclamp.engine.types import FAIL, PASS, WARN, CheckResult
@@ -31,16 +31,23 @@ def check_stability(
     gamma = gamma_small_deg if width <= width_cutoff_mm else gamma_large_deg
     thresholds = {"gamma_deg": gamma, "width_mm": width}
 
-    if len(contact) < 3:
+    def no_footprint(reason: str) -> CheckResult:
         return CheckResult(
             check="stability",
             index=0.0,
             band=FAIL,
-            measured={"reason": "fewer than 3 bed-contact points", "contact_points": int(len(contact))},
+            measured={"reason": reason, "contact_points": int(len(contact))},
             thresholds=thresholds,
         )
 
-    hull = ConvexHull(contact)
+    if len(contact) < 3:
+        return no_footprint("fewer than 3 bed-contact points")
+    try:
+        hull = ConvexHull(contact)
+    except QhullError:
+        # every contact point on one line (a knife edge, a cylinder on its
+        # side): zero-area footprint, so the part rolls or tips
+        return no_footprint("bed contact is a line, not an area")
     footprint = Polygon(contact[hull.vertices])
     com = mesh.center_mass
     com_xy = Point(float(com[0]), float(com[1]))

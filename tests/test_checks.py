@@ -38,3 +38,16 @@ def test_tall_pin_unstable(tall_pin):
     result = check_stability(tall_pin)
     assert result.band == FAIL
     assert result.measured["tip_angle_deg"] < 2.5
+
+
+def test_stability_fails_a_part_resting_on_an_edge():
+    # a triangular prism standing on one edge touches the bed along a line;
+    # Qhull cannot build a 2-D hull from collinear points (a gpt-5.1 Fusion
+    # part crashed the whole eval this way), so it must score as a FAIL
+    import trimesh
+
+    corners = [[x, y, z] for x in (0, 30) for y, z in ((0, 0), (-10, 20), (10, 20))]
+    prism = trimesh.convex.convex_hull(corners)
+    result = check_stability(prism)
+    assert result.band == FAIL
+    assert result.index == 0.0

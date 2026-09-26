@@ -37,3 +37,21 @@ def test_gates_stop_at_first_failure(nonmanifold):
     results = run_gates(nonmanifold)
     assert results[-1].status == FAIL
     assert len(results) == 2  # degenerate passed, valid_solid failed, G3 never ran
+
+
+def test_inside_out_bodies_are_oriented_outward(tmp_path):
+    # slicers flip inverted normals, so an inside-out solid is not a defect:
+    # six models' OpenSCAD t1-005 wedges failed only on negative volume
+    import trimesh
+
+    from cadclamp.engine.gates import load_mesh
+
+    good = trimesh.creation.box([10, 10, 10])
+    flipped = trimesh.creation.box([10, 10, 10])
+    flipped.apply_translation([20, 0, 0])
+    flipped.invert()
+    path = tmp_path / "two.stl"
+    trimesh.util.concatenate([good, flipped]).export(path)
+    mesh = load_mesh(path)
+    assert abs(mesh.volume - 2000.0) < 1e-6
+    assert all(b.volume > 0 for b in mesh.split(only_watertight=False))

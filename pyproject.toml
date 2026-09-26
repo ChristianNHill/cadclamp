@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-harness = ["inspect-ai>=0.3"]
+harness = ["inspect-ai>=0.3", "mcp>=2.2", "pillow>=10"]
 
 [project.scripts]
 cadclamp = "cadclamp.cli:main"

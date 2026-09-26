@@ -15,7 +15,24 @@ def load_mesh(path: str | Path) -> trimesh.Trimesh:
     # STL is unwelded triangle soup; without merging, every manifoldness
     # check fails spuriously on duplicate vertices.
     mesh.merge_vertices()
-    return mesh
+    return orient_outward(mesh)
+
+
+def orient_outward(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Flip any closed body whose faces point inward, as every slicer does.
+
+    An inside-out solid (negative signed volume) prints exactly like the
+    correct one, so it is not a printability defect: OpenSCAD polyhedra with
+    reversed winding and Rhino Breps with Inward orientation produced these.
+    Geometry that is wrong because a boolean misfired is untouched.
+    """
+    bodies = mesh.split(only_watertight=False)
+    if not any(b.is_watertight and b.volume < 0 for b in bodies):
+        return mesh
+    for body in bodies:
+        if body.is_watertight and body.volume < 0:
+            body.invert()
+    return trimesh.util.concatenate(bodies)
 
 
 def gate_degenerate(mesh: trimesh.Trimesh) -> GateResult:

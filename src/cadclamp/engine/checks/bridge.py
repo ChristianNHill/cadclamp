@@ -27,19 +27,31 @@ MIN_PATCH_AREA_MM2 = 1.0
 MAX_SCAN_LAYERS = 120
 
 
+class UnreadableLayer(Exception):
+    """trimesh could not turn the section at this height into polygons."""
+
+
 def _layer_polygon(mesh: trimesh.Trimesh, z: float):
-    """Solid cross-section at height z, as one shapely geometry (None if empty)."""
-    section = mesh.section(plane_origin=[0.0, 0.0, z], plane_normal=[0.0, 0.0, 1.0])
-    if section is None:
-        return None
-    try:
-        planar, _ = section.to_2D(to_2D=np.eye(4))
-    except Exception:
-        return None
-    polygons = [p for p in planar.polygons_full if p.is_valid and not p.is_empty]
-    if not polygons:
-        return None
-    return unary_union(polygons)
+    """Solid cross-section at height z, as one shapely geometry (None if empty).
+
+    A plane that lands exactly on coplanar faces or vertices can yield loops
+    trimesh cannot repair ("unable to recover polygon!"); nudging the plane a
+    micron clears it. Raises UnreadableLayer if no nudge helps, because
+    reporting "empty" would make the next layer a false floating island.
+    """
+    for dz in (0.0, 1e-3, -1e-3, 5e-3):
+        section = mesh.section(plane_origin=[0.0, 0.0, z + dz], plane_normal=[0.0, 0.0, 1.0])
+        if section is None:
+            return None
+        try:
+            planar, _ = section.to_2D(to_2D=np.eye(4))
+            polygons = [p for p in planar.polygons_full if p.is_valid and not p.is_empty]
+        except ValueError:
+            continue
+        except Exception:
+            return None
+        return unary_union(polygons) if polygons else None
+    raise UnreadableLayer(z)
 
 
 def _reach_over(patch, support, ceiling: float) -> float:
@@ -101,10 +113,17 @@ def check_bridge(
     ceiling = float(np.linalg.norm(mesh.extents[:2]))  # no span can exceed the footprint diagonal
     worst_reach, worst_z, worst_area = 0.0, None, 0.0
 
-    below = _layer_polygon(mesh, z_min + step / 2.0)
+    try:
+        below = _layer_polygon(mesh, z_min + step / 2.0)
+    except UnreadableLayer:
+        below = None
     z = z_min + 1.5 * step
     while z < z_max:
-        here = _layer_polygon(mesh, z)
+        try:
+            here = _layer_polygon(mesh, z)
+        except UnreadableLayer:
+            z += step  # keep the last readable layer as the support
+            continue
         if here is not None:
             # one layer of 45 degree reach is what the previous layer can carry
             supported = below.buffer(step) if below is not None else None
