@@ -47,10 +47,10 @@ from pathlib import Path
 from inspect_ai.log import list_eval_logs, read_eval_log
 
 from cadclamp.engine.composite import band_cap, weighted_geometric_mean
-from cadclamp.prompts import DEFAULT_PROMPTS, check_assertions, load_prompts
+from cadclamp.prompts import PROMPT_SETS, check_assertions, load_prompts, reference_scores
 
 HARNESS = {"openrouter": "openrouter", "claudecli": "claude-cli", "ollama": "ollama", "mockllm": "baseline"}
-REFERENCE_SCORES = json.loads((DEFAULT_PROMPTS.parent / "reference" / "scores.json").read_text())
+REFERENCE_SCORES = reference_scores()
 FIRST_V02_TASK_VERSION = 3
 MESH_DIR = Path("logs/meshes")
 REGRADE_CACHE = Path("logs/regrade-cache.json")
@@ -62,9 +62,13 @@ class Regrader:
     def __init__(self) -> None:
         from cadclamp.engine.score import ENGINE_VERSION
 
-        prompt_set = load_prompts()
-        self.prompts = {p.id: p for p in prompt_set.prompts}
-        self.stamp = f"{ENGINE_VERSION}|{prompt_set.manifest['version']}"
+        self.prompts: dict = {}
+        self.stamps: dict[str, str] = {}
+        for path in PROMPT_SETS.values():
+            prompt_set = load_prompts(path)
+            for p in prompt_set.prompts:
+                self.prompts[p.id] = p
+                self.stamps[p.id] = f"{ENGINE_VERSION}|{prompt_set.manifest['version']}"
         self.cache = json.loads(REGRADE_CACHE.read_text()) if REGRADE_CACHE.exists() else {}
         self.dirty = False
 
@@ -74,7 +78,7 @@ class Regrader:
         path = MESH_DIR / f"{sha}.stl" if sha else None
         if not (prompt and path and path.exists()):
             return meta  # nothing saved for this sample: fall back to the log
-        key = f"{sha}|{prompt_id}|{self.stamp}"
+        key = f"{sha}|{prompt_id}|{self.stamps[prompt_id]}"
         if key not in self.cache:
             from cadclamp.engine.gates import load_mesh
             from cadclamp.engine.score import score_mesh
@@ -164,10 +168,13 @@ def collect(log_dirs: list[str], tiers: set[int] | None, regrader: Regrader | No
             harness = HARNESS.get(provider, provider)
             if args.get("feedback") == "image":
                 harness += "+image"  # image-feedback repair is its own variant
+            language = args.get("language", "build123d") if "baseline" not in model else "openscad"
+            if args.get("prompt_set", "v0.2") != "v0.2":
+                language += f"@{args['prompt_set']}"  # another prompt set is its own column
             key = (
                 model.split("/")[-1],
                 harness,
-                args.get("language", "build123d") if "baseline" not in model else "openscad",
+                language,
                 int(args.get("attempts", 1)),
                 task_version,
             )
