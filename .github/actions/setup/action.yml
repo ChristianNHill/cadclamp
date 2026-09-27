@@ -1,0 +1,23 @@
+name: setup
+description: Python 3.12, the pinned OpenSCAD snapshot, and the package with test extras
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+    - name: Install OpenSCAD snapshot
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends libfuse2 libgl1 libglu1-mesa libxi6 libxrender1 libegl1
+        curl -fsSL "$OPENSCAD_URL" -o openscad.AppImage
+        echo "$OPENSCAD_SHA256  openscad.AppImage" | sha256sum -c -
+        chmod +x openscad.AppImage
+        ./openscad.AppImage --appimage-extract > /dev/null
+        echo "CADCLAMP_OPENSCAD=$PWD/squashfs-root/AppRun" >> "$GITHUB_ENV"
+        squashfs-root/AppRun --info | head -3
+    - name: Install package
+      shell: bash
+      run: pip install -e ".[dev,harness]" matplotlib pytest-xdist
