@@ -35,12 +35,24 @@ def orient_outward(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     if not any(b.is_watertight and b.volume < 0 for b in bodies):
         return mesh
     closed = [b for b in bodies if b.is_watertight]
-    for body in bodies:
-        if body.is_watertight and body.volume < 0:
-            probe = body.vertices[:1]
-            depth = sum(bool(contains(other, probe)[0]) for other in closed if other is not body)
-            if depth % 2 == 0:
-                body.invert()
+    inward = [i for i, b in enumerate(closed) if b.volume < 0]
+    # nesting depth of each inward shell: how many other closed shells hold its
+    # first vertex. A bounding-box test rules out almost every pair, and each
+    # container is tested once against all its candidates (a failed boolean
+    # can leave tens of thousands of fragments; pair by pair took 26 minutes)
+    probes = np.array([closed[i].vertices[0] for i in inward])
+    position = {i: k for k, i in enumerate(inward)}
+    depth = np.zeros(len(inward), dtype=int)
+    for j, other in enumerate(closed):
+        lo, hi = other.bounds
+        cand = np.all((probes >= lo) & (probes <= hi), axis=1)
+        if j in position:  # a shell never contains itself
+            cand[position[j]] = False
+        if cand.any():
+            depth[cand] += contains(other, probes[cand])
+    for k, i in enumerate(inward):
+        if depth[k] % 2 == 0:
+            closed[i].invert()
     return trimesh.util.concatenate(bodies)
 
 
