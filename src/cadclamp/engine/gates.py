@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
+from cadclamp.engine.winding import contains
 from cadclamp.engine.types import FAIL, PASS, SKIPPED, GateResult
 
 MIN_VOLUME_MM3 = 1e-6
@@ -25,13 +26,21 @@ def orient_outward(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     correct one, so it is not a printability defect: OpenSCAD polyhedra with
     reversed winding and Rhino Breps with Inward orientation produced these.
     Geometry that is wrong because a boolean misfired is untouched.
+
+    A shell nested inside an odd number of other shells is the wall of a
+    sealed void, and facing inward is correct for it (engine 0.2.2: 0.2.1
+    flipped these too, filling the void with solid).
     """
     bodies = mesh.split(only_watertight=False)
     if not any(b.is_watertight and b.volume < 0 for b in bodies):
         return mesh
+    closed = [b for b in bodies if b.is_watertight]
     for body in bodies:
         if body.is_watertight and body.volume < 0:
-            body.invert()
+            probe = body.vertices[:1]
+            depth = sum(bool(contains(other, probe)[0]) for other in closed if other is not body)
+            if depth % 2 == 0:
+                body.invert()
     return trimesh.util.concatenate(bodies)
 
 

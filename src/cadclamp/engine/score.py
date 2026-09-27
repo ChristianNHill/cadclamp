@@ -10,7 +10,7 @@ from cadclamp.engine.composite import band_cap, weighted_geometric_mean
 from cadclamp.engine.gates import load_mesh, run_gates_with_mesh
 from cadclamp.engine.types import FAIL, ReportCard
 
-ENGINE_VERSION = "0.2.1"  # 0.2.1: inside-out bodies oriented outward before scoring
+ENGINE_VERSION = "0.2.2"  # 0.2.1: inside-out bodies oriented outward; 0.2.2: sealed voids left facing inward
 
 DEFAULT_PROCESS: dict[str, Any] = {
     "name": "fdm",

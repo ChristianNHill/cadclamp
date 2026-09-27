@@ -14,6 +14,8 @@ difference() {
                 cube([inner[0] - 2 * ledge_depth, inner[1] - 2 * ledge_depth, 0.01]);
         }
         translate([-inner[0] / 2 + ledge_depth, -inner[1] / 2 + ledge_depth, ledge_top - 0.02])
-            cube([inner[0] - 2 * ledge_depth, inner[1] - 2 * ledge_depth, outer[2]]);
+            cube([inner[0] - 2 * ledge_depth, inner[1] - 2 * ledge_depth, 1]);
+        // above the ledge: full 56 x 36 cavity, so the board rests on the ledge top
+        translate([-inner[0] / 2, -inner[1] / 2, ledge_top]) cube([inner[0], inner[1], outer[2]]);
     }
 }
