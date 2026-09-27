@@ -13,5 +13,5 @@ restrictions on developing or training competing models. CADClamp makes no
 representation that such downstream uses are permitted.
 
 Prompts, reference geometry, scoring code, and leaderboard aggregates are
-CADClamp's own work and are licensed under LICENSE (code, Apache-2.0) and
+CADClamp's own work and are licensed under ../LICENSE (code, Apache-2.0) and
 LICENSE-DATA (data, CDLA-Permissive-2.0) respectively.

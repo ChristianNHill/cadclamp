@@ -53,4 +53,4 @@ treatment by default: separate container, unmodified upstream build, results
 crossing the boundary as files.
 
 OCCT ships inside the Python image under LGPL-2.1 with the Open CASCADE
-Exception 1.0 (see `../NOTICE`).
+Exception 1.0 (see `../licenses/NOTICE`).
