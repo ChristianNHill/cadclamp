@@ -32,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     # Line width defaults to the nozzle diameter, the slicer convention.
     process = {"nozzle_mm": args.nozzle, "line_width_mm": args.nozzle, "layer_mm": args.layer}
     cards = []
+    notes = []
     header = f"{'part':<32} {'printability':>12}  {'gates':<20} checks"
     print(header)
     print("-" * len(header))
@@ -40,6 +41,14 @@ def main(argv: list[str] | None = None) -> int:
         cards.append(card.to_dict())
         if card.gated_out:
             gate_txt = f"FAIL:{card.failure_code}"
+            solid = next((g for g in card.gates if g.gate == "G2.valid_solid"), None)
+            if solid is not None and solid.detail.get("slicer_recoverable"):
+                gate_txt += "*"
+                touching, open_ = solid.detail.get("touching_edges", 0), solid.detail.get("open_edges", 0)
+                why = [f"surfaces touch along {touching} edges" if touching else "",
+                       f"{open_} open edges" if open_ else "no holes"]
+                notes.append(f"* {card.part}: not a strict solid ({', '.join(w for w in why if w)}), "
+                             "but slicers should still print it")
             check_txt = "-"
             score_txt = "0.000"
         else:
@@ -47,6 +56,10 @@ def main(argv: list[str] | None = None) -> int:
             check_txt = "  ".join(f"{c.check}={c.index:.2f}[{_band_mark(c.band)}]" for c in card.checks)
             score_txt = f"{card.printability:.3f}"
         print(f"{card.part:<32} {score_txt:>12}  {gate_txt:<20} {check_txt}")
+
+    if notes:
+        print()
+        print("\n".join(notes))
 
     if args.json:
         args.json.write_text(json.dumps(cards, indent=2))

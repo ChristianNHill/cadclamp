@@ -111,12 +111,18 @@ def validate_solid(mesh: trimesh.Trimesh) -> tuple[GateResult, trimesh.Trimesh]:
         return GateResult(gate, PASS, "repaired", detail), repaired
 
     # Repair could not close it. Distinguish "a slicer would still print this"
-    # (one coherent body with real bulk) from degenerate output.
+    # from degenerate output: either one coherent body, or a closed surface
+    # whose only defect is surfaces touching along edges (no open edges), as
+    # in 3DBenchy. Slicers print both; OrcaSlicer checked on real models.
     try:
         hull_volume = float(mesh.convex_hull.volume)
     except Exception:
         hull_volume = 0.0
-    detail["slicer_recoverable"] = bool(mesh.body_count == 1 and hull_volume > 1.0)
+    counts = np.unique(mesh.edges_sorted, axis=0, return_counts=True)[1] if len(mesh.faces) else np.array([])
+    detail["open_edges"] = int((counts == 1).sum())
+    detail["touching_edges"] = int((counts > 2).sum())
+    closed = detail["open_edges"] == 0
+    detail["slicer_recoverable"] = bool(hull_volume > 1.0 and (mesh.body_count == 1 or closed))
     code = "not_watertight" if not mesh.is_watertight else "bad_winding"
     return GateResult(gate, FAIL, code, detail), mesh
 

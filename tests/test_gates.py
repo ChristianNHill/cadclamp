@@ -55,3 +55,34 @@ def test_inside_out_bodies_are_oriented_outward(tmp_path):
     mesh = load_mesh(path)
     assert abs(mesh.volume - 2000.0) < 1e-6
     assert all(b.volume > 0 for b in mesh.split(only_watertight=False))
+
+
+def test_closed_surface_with_touching_bodies_is_slicer_recoverable():
+    # two boxes sharing one edge: no open edges, but that edge has four faces
+    # (the 3DBenchy defect); slicers print it, so it is tagged recoverable
+    a = trimesh.creation.box(extents=(10, 10, 10))
+    b = trimesh.creation.box(extents=(10, 10, 10))
+    b.apply_translation((10, 10, 0))
+    mesh = trimesh.util.concatenate([a, b])
+    mesh.merge_vertices()
+    result = gate_valid_solid(mesh)
+    assert result.status == FAIL
+    assert result.detail["open_edges"] == 0
+    assert result.detail["touching_edges"] > 0
+    assert result.detail["slicer_recoverable"] is True
+
+
+def test_cli_notes_slicer_recoverable_parts(tmp_path, capsys):
+    from cadclamp.cli import main
+
+    a = trimesh.creation.box(extents=(10, 10, 10))
+    b = trimesh.creation.box(extents=(10, 10, 10))
+    b.apply_translation((10, 10, 0))
+    mesh = trimesh.util.concatenate([a, b])
+    mesh.merge_vertices()
+    path = tmp_path / "touching.stl"
+    mesh.export(path)
+    main(["score", str(path)])
+    out = capsys.readouterr().out
+    assert "FAIL:not_watertight*" in out
+    assert "slicers should still print it" in out

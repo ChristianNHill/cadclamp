@@ -5,7 +5,7 @@
 [![code: Apache-2.0](https://img.shields.io/badge/code-Apache--2.0-4c7a2f)](LICENSE)
 [![data: CDLA-P-2.0](https://img.shields.io/badge/data-CDLA--Permissive--2.0-4c7a2f)](LICENSE-DATA)
 [![status](https://img.shields.io/badge/status-v0.2--dev-b7791f)](#caveats)
-[![tests](https://img.shields.io/badge/tests-113%20passing-4c7a2f)](tests/)
+[![tests](https://img.shields.io/badge/tests-115%20passing-4c7a2f)](tests/)
 
 Existing benchmarks for AI-generated CAD check whether the code runs or whether the
 shape matches a reference. None that I found check whether the part can be made.
@@ -317,10 +317,36 @@ Grading your own parts needs no Docker and no API keys:
 ```sh
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
-pytest                                 # 113 tests
+pytest                                 # 115 tests
 python -m cadclamp score part.stl      # DfAM report card, add --json for full detail
 python -m cadclamp score part.stl --nozzle 0.25 --layer 0.12   # your printer's setup
 ```
+
+Scores for popular published models, each also sliced in OrcaSlicer on the Bambu Lab
+P2S profile:
+
+| Model | Printability | Engine flags | OrcaSlicer support |
+|---|--:|---|--:|
+| Voron heat-set insert practice | 0.996 | none | 0% |
+| RepRap 50 mm tower | 0.993 | none | 0% |
+| Prusa MK3S X-end idler | 0.988 | none | 12% |
+| Prusa MK3S extruder body | 0.986 | none | 5% |
+| Prusa MK3S X-carriage | 0.985 | none | 4% |
+| Prusa MK3S spool holder | 0.976 | none | 0% |
+| Voron Design Cube v7 | 0.850 | thin walls (warn) | 14% |
+| Prusa MK3S fan shroud | 0.811 | thin walls (warn) | 5% |
+| Voron thread test | 0.574 | thread flanks thin and steep (warn) | 31% |
+| RepRap 20 mm hollow box | 0.500 | flat roof overhang (fail) | 25% |
+| RepRap 0.5 mm thin wall | 0.238 | wall under one line width (fail) | does not slice |
+| RepRap bridge torture test | 0.189 | thin bridges, overhang (fail) | 42% |
+| 3DBenchy | 0.000* | not a strict solid | 24% |
+| Voron Stealthburner main body | 0.000* | not a strict solid | 6% |
+| RepRap overhang test | 0.000* | not a strict solid | 16% |
+
+\* These fail the strict solid check because surfaces touch along a few edges, but
+they have no holes, and all three slice. The CLI marks such parts as
+slicer-recoverable. Support is a share of the filament. The slicer agrees with the
+engine at the extremes: the 0.5 mm wall that the engine fails does not slice at all.
 
 Wall rules are in line widths, so nozzle size changes the verdicts. Leaderboard runs
 always use the default profile (0.4 mm nozzle, 0.2 mm layers).
