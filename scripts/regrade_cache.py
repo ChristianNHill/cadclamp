@@ -70,7 +70,9 @@ def main(argv=None) -> int:
     rg = Regrader()
     samples = [s for s in load_index() if s["sha"] and s["prompt"] in rg.prompts and (MESH_DIR / f"{s['sha']}.stl").exists()]
     items = sorted({(s["sha"], s["prompt"]) for s in samples}, key=lambda x: -(MESH_DIR / f"{x[0]}.stl").stat().st_size)
-    todo = [x for x in items if f"{x[0]}|{x[1]}|{rg.stamps[x[1]]}" not in rg.cache or a.base]
+    # the cache key carries a fingerprint of each prompt's spec, so only pairs
+    # whose prompt changed (or that are new) need computing, flips included
+    todo = [x for x in items if f"{x[0]}|{x[1]}|{rg.stamps[x[1]]}" not in rg.cache]
     print(f"{len(items)} mesh/prompt pairs, {len(todo)} to compute on {a.workers} workers", flush=True)
 
     results: dict[tuple[str, str], tuple] = {}

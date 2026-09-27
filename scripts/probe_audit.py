@@ -47,7 +47,11 @@ def base_assertions(base: str) -> dict[str, list]:
             if shown.returncode:
                 continue
             for p in yaml.safe_load(shown.stdout)["prompts"]:
-                out[p["id"]] = p.get("assertions", [])
+                assertions = p.get("assertions", [])
+                for a in assertions:  # load_prompts attaches this; raw YAML does not
+                    if a.get("type") in PROBES:
+                        a["reference"] = str(path.parent / "reference" / f"{p['id']}.scad")
+                out[p["id"]] = assertions
     return out
 
 
