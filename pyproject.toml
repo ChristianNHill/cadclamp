@@ -16,6 +16,10 @@ dependencies = [
     "scipy>=1.14",
     "shapely>=2.0",
     "pyyaml>=6.0",
+    # trimesh loads these lazily: rtree for proximity / wall thickness,
+    # networkx for hole filling and cross-section polygons
+    "rtree>=1.0",
+    "networkx>=3.0",
 ]
 
 [project.optional-dependencies]
