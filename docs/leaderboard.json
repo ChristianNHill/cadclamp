@@ -1,7 +1,7 @@
 {
  "benchmark": "CADClamp",
  "generated": "2026-09-27",
- "commit": "85ef6ac+dirty",
+ "commit": "d8f0c95",
  "versions": {
   "prompt_sets": {
    "v0.2": "0.2.2",
