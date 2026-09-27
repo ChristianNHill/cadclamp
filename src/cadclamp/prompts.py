@@ -191,7 +191,8 @@ _AXES = {"x": np.array([1.0, 0, 0]), "y": np.array([0, 1.0, 0]), "z": np.array([
 # default $fn gives small holes (a 4.5 mm hole as a 7-gon is 0.22 mm narrow).
 PROBES = (
     "solid_points", "empty_points", "empty_cylinder", "hole", "empty_sphere", "empty_box", "solid_box",
-    "radial_count", "line_count", "section", "chord", "reference_iou",
+    "radial_count", "line_count", "section", "chord", "reference_iou", "helix",
+    "same_body", "captive",
 )
 HOLE_TOL_MM = 0.3
 
@@ -352,6 +353,75 @@ def _best_aligned_iou(mesh: trimesh.Trimesh, ref: trimesh.Trimesh) -> tuple[floa
     return best, which
 
 
+CAPTIVE_TRAVEL_MM = 3.0
+
+
+def _solid_bodies(mesh: trimesh.Trimesh) -> list[trimesh.Trimesh]:
+    """Connected solids, without the inward shells of sealed voids."""
+    return [b for b in mesh.split(only_watertight=False) if not (b.is_watertight and b.volume < 0)]
+
+
+def _owner(bodies: list[trimesh.Trimesh], point) -> int | None:
+    pt = np.asarray(point, dtype=float)[None, :]
+    return next((i for i, b in enumerate(bodies) if contains(b, pt)[0]), None)
+
+
+HELIX_MIN_AMPLITUDE = 0.12  # |c_n| of the solid/empty pattern; a 50% square wave has 1/pi
+
+
+def _helix(mesh: trimesh.Trimesh, assertion: dict[str, Any]) -> dict[str, Any]:
+    """Measure the helix a thread traces at `radius` about the Z axis through
+    `center`, between heights `z` = [lo, hi]. Returns starts, hand
+    (right | left | none), pitch_mm and the pattern amplitude."""
+    from shapely import contains_xy
+
+    cx, cy = (float(c) for c in assertion["center"][:2])
+    r = float(assertion["radius"])
+    lo, hi = (float(x) for x in assertion["z"])
+    step = float(assertion.get("step", float(assertion.get("pitch", (hi - lo) / 8)) / 8))
+    ang = np.linspace(0, 2 * np.pi, 360, endpoint=False)
+    xs, ys = cx + r * np.cos(ang), cy + r * np.sin(ang)
+    harmonics = np.arange(1, 7)
+    basis = np.exp(-1j * np.outer(harmonics, ang))
+    coeffs, heights = [], []
+    # a small odd offset keeps the planes off the layer heights a CAD kernel
+    # tends to put vertices on (degenerate sections)
+    for z in np.arange(lo, hi + 1e-9, step) + 1.37e-3:
+        sec = mesh.section(plane_origin=[0, 0, z], plane_normal=[0, 0, 1])
+        if sec is None:
+            continue
+        planar, _ = sec.to_2D(to_2D=np.eye(4))
+        inside = np.zeros(len(ang), dtype=bool)
+        for poly in planar.polygons_full:
+            inside |= contains_xy(poly, xs, ys)
+        coeffs.append(basis @ inside.astype(float) / len(ang))
+        heights.append(z)
+    if len(coeffs) < 4:
+        return {"reason": "too few sections", "starts": None, "hand": None}
+    c = np.asarray(coeffs)  # heights x harmonics
+    amp = np.median(np.abs(c), axis=0)
+    if amp.max() < HELIX_MIN_AMPLITUDE:
+        return {"starts": 0, "hand": "none", "amplitude": round(float(amp.max()), 3)}
+    # the lowest strong harmonic: a one-start thread with a lopsided duty
+    # cycle has a second harmonic nearly as large as its first, but an
+    # n-start thread has no harmonic below n
+    n = int(harmonics[np.flatnonzero(amp >= 0.5 * amp.max())[0]])
+    phase = np.angle(c[:, n - 1])
+    dz = np.diff(heights)
+    turn = np.angle(np.exp(1j * np.diff(phase))) / dz  # rad per mm, wrapped per step
+    rate = float(np.median(turn))
+    # the pattern rotates by -phase / n; a right-hand thread turns counter-
+    # clockwise (seen from +Z) as it rises, so its phase falls
+    if abs(rate) < 1e-3:
+        return {"starts": n, "hand": "none", "amplitude": round(float(amp[n - 1]), 3)}
+    return {
+        "starts": n,
+        "hand": "right" if rate < 0 else "left",
+        "pitch_mm": round(float(2 * np.pi / abs(rate)), 3),
+        "amplitude": round(float(amp[n - 1]), 3),
+    }
+
+
 def _interface_check(mesh: trimesh.Trimesh, kind: str, assertion: dict[str, Any]) -> dict[str, Any]:
     """Point-sampled checks on where material is and is not.
 
@@ -368,6 +438,18 @@ def _interface_check(mesh: trimesh.Trimesh, kind: str, assertion: dict[str, Any]
     section: the cross-section at a height: area, separate regions, holes.
     chord: the solid length through a point along a direction (a wall or
         floor thickness).
+    helix: a thread's hand, number of starts and pitch. Z sections every
+        pitch/8 over the stated range, each sampled round a circle at the
+        mid-flank radius; the Fourier harmonic of that solid/empty pattern
+        gives the starts (the lowest strong harmonic: an n-start thread
+        repeats n times per turn) and the drift of its phase with Z gives the
+        hand and the pitch (median step, so faceting and a stray section
+        cannot flip it). Stacked rings have no angular pattern and fail.
+    same_body: which body owns what, for multi-body parts: each group of
+        points lies inside one body, and different groups in different bodies.
+    captive: a print-in-place body stays on. The body holding `point` is
+        pushed `travel` mm along each listed direction and must run into
+        another body every time (a ball with an open eye falls out).
     reference_iou: intersection over union with the prompt's reference
         solution, placed where the prompt pins the part (exact, via manifold).
         With `align: true` (prompts that leave orientation to the model),
@@ -451,6 +533,41 @@ def _interface_check(mesh: trimesh.Trimesh, kind: str, assertion: dict[str, Any]
         r = float(assertion["diameter"]) / 2.0 - float(assertion.get("tol", HOLE_TOL_MM))
         hit = contains(mesh, _sphere_points(center, r))
         return result(not hit.any(), {"solid_fraction": round(float(hit.mean()), 4)})
+
+    if kind == "same_body":
+        bodies = _solid_bodies(mesh)
+        owners = [[_owner(bodies, pt) for pt in group] for group in assertion["groups"]]
+        firsts = [g[0] for g in owners]
+        ok = (all(o is not None and o == g[0] for g in owners for o in g)
+              and len(set(firsts)) == len(firsts))
+        return result(ok, {"bodies": len(bodies), "owners": owners})
+
+    if kind == "captive":
+        bodies = _solid_bodies(mesh)
+        who = _owner(bodies, assertion["point"])
+        if who is None or len(bodies) < 2:
+            return result(False, {"bodies": len(bodies), "reason": "no second body" if who is not None else "point not inside a body"})
+        rest = trimesh.util.concatenate([b for i, b in enumerate(bodies) if i != who])
+        travel = float(assertion.get("travel", CAPTIVE_TRAVEL_MM))
+        blocked = []
+        for d in assertion["directions"]:
+            d = np.asarray(d, dtype=float)
+            moved = bodies[who].copy()
+            moved.apply_translation(travel * d / np.linalg.norm(d))
+            try:
+                hit = float(abs(moved.intersection(rest, engine="manifold").volume))
+            except Exception:  # manifold refuses a non-manifold input
+                hit = 0.0
+            blocked.append(hit > 0.01)
+        return result(all(blocked), {"blocked": blocked})
+
+    if kind == "helix":
+        measured = _helix(mesh, assertion)
+        ok = (measured.get("starts") == int(assertion["starts"])
+              and measured.get("hand") == assertion["hand"])
+        if "pitch" in assertion and ok:
+            ok = abs(measured["pitch_mm"] - float(assertion["pitch"])) <= float(assertion.get("pitch_tol", 0.15)) * float(assertion["pitch"])
+        return result(ok, measured)
 
     axis = assertion.get("axis", "z")
     center = np.asarray(assertion["center"], dtype=float)

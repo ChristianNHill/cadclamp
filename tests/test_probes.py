@@ -130,3 +130,80 @@ def test_aligned_reference_iou_ignores_orientation_but_not_shape(tmp_path):
     assert _passed(stood_up, probe) == [True]
     assert _passed(mirrored, probe) == [True]
     assert check_assertions(no_hole, [probe])[0]["measured"]["iou"] < 0.97
+
+
+def _twisted(profile: str, twist: float, height: float = 20.0) -> trimesh.Trimesh:
+    from cadclamp.mutants import render
+
+    return render(f"$fn = 96; linear_extrude(height = {height}, twist = {twist}, slices = 160, convexity = 4) {profile}")
+
+
+HELIX = {"type": "helix", "center": [0, 0, 0], "radius": 5.0, "z": [2, 18], "pitch": 4.0}
+
+
+@pytest.mark.skipif(not os.environ.get("CADCLAMP_OPENSCAD"), reason="OpenSCAD not configured")
+def test_helix_sees_hand_starts_and_pitch():
+    # an off-centre disc swept with twist is a one-start helical lobe; an
+    # ellipse is a two-start one. OpenSCAD's positive twist is clockwise seen
+    # from +Z, so negative twist rises counter-clockwise: a right-hand helix.
+    one = "translate([1, 0]) circle(r = 5);"
+    two = "scale([1.25, 0.8]) circle(r = 5);"
+    rh1 = _twisted(one, -360 * 20 / 4)       # lead 4 = pitch 4
+    lh1 = _twisted(one, 360 * 20 / 4)
+    rh2 = _twisted(two, -360 * 20 / 8)       # lead 8, two starts: pitch 4
+    right1, right2 = {**HELIX, "hand": "right", "starts": 1}, {**HELIX, "hand": "right", "starts": 2}
+    assert _passed(rh1, right1, right2) == [True, False]
+    assert _passed(lh1, right1, {**right1, "hand": "left"}) == [False, True]
+    assert _passed(rh2, right1, right2) == [False, True]
+    measured = check_assertions(rh2, [right2])[0]["measured"]
+    assert measured["pitch_mm"] == pytest.approx(4.0, rel=0.05)
+    # the same ellipse at lead 4 is a two-start thread of pitch 2
+    assert _passed(_twisted(two, -360 * 20 / 4), right2) == [False]
+
+
+@pytest.mark.skipif(not os.environ.get("CADCLAMP_OPENSCAD"), reason="OpenSCAD not configured")
+def test_helix_rejects_stacked_rings():
+    from cadclamp.mutants import render
+
+    # V-grooved tube: crests every 4 mm like a thread, but rings, not a helix
+    rings = render("$fn = 96; rotate_extrude() polygon(concat([[2, 0]], "
+                   "[for (i = [0:10]) each [[6, 4 * i], [4, 4 * i + 2]]], [[6, 44], [2, 44]]));")
+    res = check_assertions(rings, [{**HELIX, "hand": "right", "starts": 1}])[0]
+    assert res["passed"] is False and res["measured"]["starts"] == 0
+
+
+@pytest.mark.skipif(not os.environ.get("CADCLAMP_OPENSCAD"), reason="OpenSCAD not configured")
+@pytest.mark.parametrize("pid,radius,z,pitch", [
+    ("t4-003", 9.23, [8.5, 33.5], 2.5), ("t4-004", 9.525, [5, 16], 2.5),
+    ("t4-007", 13.25, [1.2, 13], 4.0), ("t4-007", 11.25, [22, 38], 3.0)])
+def test_helix_passes_the_thread_references(pid, radius, z, pitch):
+    from cadclamp.mutants import render
+    from cadclamp.prompts import PROMPTS_DIR
+
+    ref = render((PROMPTS_DIR / "v0.2" / "reference" / f"{pid}.scad").read_text())
+    probe = {"type": "helix", "center": [0, 0, 0], "radius": radius, "z": z, "pitch": pitch, "hand": "right", "starts": 1}
+    res = check_assertions(ref, [probe])[0]
+    assert res["passed"], res["measured"]
+    assert _passed(ref, {**probe, "hand": "left"}, {**probe, "starts": 2}) == [False, False]
+
+
+def _ball_in_eye(captive: bool):
+    """A 10 mm ball in a 20 mm block, 0.5 mm clear all round. The eye is
+    open top and bottom: through a 6 mm hole (captive) or a 11 mm one."""
+    block = trimesh.creation.box([20, 20, 10])
+    seat = trimesh.creation.icosphere(subdivisions=4, radius=5.5)
+    hole = trimesh.creation.cylinder(radius=3 if captive else 5.5, height=30, sections=64)
+    housing = block.difference(seat, engine="manifold").difference(hole, engine="manifold")
+    ball = trimesh.creation.icosphere(subdivisions=4, radius=5.0).intersection(
+        trimesh.creation.box([12, 12, 9]), engine="manifold")
+    return trimesh.util.concatenate([housing, ball])
+
+
+def test_captive_and_same_body():
+    push = {"type": "captive", "point": [0, 0, 0], "directions": [[0, 0, 1], [0, 0, -1], [1, 0, 0]]}
+    owners = {"type": "same_body", "groups": [[[0, 0, 0], [4, 0, 0]], [[9, 0, 0], [-9, 9, 0]]]}
+    assert _passed(_ball_in_eye(True), push, owners) == [True, True]
+    assert _passed(_ball_in_eye(False), push, owners) == [False, True]
+    # the ball and the housing swapped between groups, or one body claimed twice
+    assert _passed(_ball_in_eye(True), {**owners, "groups": [[[0, 0, 0], [9, 0, 0]], [[-9, 9, 0]]]}) == [False]
+    assert _passed(_ball_in_eye(True), {**owners, "groups": [[[0, 0, 0]], [[4, 0, 0]]]}) == [False]
