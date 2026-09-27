@@ -21,3 +21,16 @@ def test_regrade_matches_engine_composite_with_advisory_checks():
     advisory = [c for c in card.checks if c.advisory]
     assert advisory and advisory[0].index < 0.5
     assert leaderboard.regrade({"report": card.to_dict()}) == card.printability
+
+
+def test_criteria_are_scored_relative_to_the_reference():
+    # matching the reference on a forced bridge costs nothing; half its index halves the factor
+    meta = lambda idx: {"report": {"checks": [{"check": "bridge_span", "index": idx, "advisory": True},
+                                              {"check": "min_wall", "index": 0.2, "advisory": False}]}}
+    ref = {"bridge_span": 0.6}
+    assert leaderboard.criteria_factor(meta(0.6), ref) == 1.0
+    assert leaderboard.criteria_factor(meta(0.9), ref) == 1.0
+    assert abs(leaderboard.criteria_factor(meta(0.3), ref) - 0.5) < 1e-9
+    assert leaderboard.criteria_factor(meta(0.3), {}) == 1.0
+    # a report from before the check existed carries no information, not a zero
+    assert leaderboard.criteria_factor(meta(0.3), {"fit_clearance": 0.9}) == 1.0
