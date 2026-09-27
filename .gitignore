@@ -21,7 +21,7 @@ logs/
 dist/
 
 # build-process documents — about how the project was made, not the project
-CLAUDE.md
+CLAUDE.local.md
 docs/BUILD_PLAN.md
 docs/build-plan.html
 docs/research/
