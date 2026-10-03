@@ -1,3 +1,8 @@
+import os
+import subprocess
+
+import numpy as np
+import pytest
 import trimesh
 
 from cadclamp.engine.gates import gate_degenerate, gate_valid_solid, run_gates
@@ -86,3 +91,58 @@ def test_cli_notes_slicer_recoverable_parts(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "FAIL:not_watertight*" in out
     assert "slicers should still print it" in out
+
+
+def _pole_sliver(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    # OCCT's sphere pole: one face split off as a sliver whose two pole
+    # vertices are separate copies at the same point
+    v, f = mesh.vertices, mesh.faces
+    a, b, _ = f[0]
+    pole = len(v)
+    vertices = np.vstack([v, v[a]])
+    faces = np.vstack([f, [[a, pole, b]]])
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+
+def test_pole_sliver_does_not_open_the_solid(tmp_path):
+    from cadclamp.engine.gates import load_mesh
+
+    path = tmp_path / "pole.stl"
+    _pole_sliver(trimesh.creation.box(extents=(10, 10, 10))).export(path)
+    mesh = load_mesh(path)
+    assert mesh.is_watertight
+    assert abs(mesh.volume - 1000.0) < 1e-6
+
+
+def test_deleted_face_still_open(tmp_path, open_soup):
+    from cadclamp.engine.gates import load_mesh
+
+    path = tmp_path / "open.stl"
+    _pole_sliver(open_soup).export(path)
+    assert not load_mesh(path).is_watertight
+
+
+def test_bodies_touching_along_an_edge_stay_non_manifold(tmp_path):
+    from cadclamp.engine.gates import load_mesh
+
+    a = trimesh.creation.box(extents=(10, 10, 10))
+    b = trimesh.creation.box(extents=(10, 10, 10))
+    b.apply_translation((10, 10, 0))
+    path = tmp_path / "touching.stl"
+    _pole_sliver(trimesh.util.concatenate([a, b])).export(path)
+    mesh = load_mesh(path)
+    assert not mesh.is_watertight
+    assert gate_valid_solid(mesh).detail["touching_edges"] > 0
+
+
+@pytest.mark.skipif(not os.environ.get("CADCLAMP_SANDBOX_PYTHON"), reason="build123d not configured")
+@pytest.mark.parametrize("shape", ["Sphere(10.4)", "Box(30, 30, 30) - Pos(0, 0, 15) * Sphere(10.4)"])
+def test_build123d_sphere_is_watertight(tmp_path, shape):
+    # every part with a spherical surface failed watertightness before 0.2.3
+    from cadclamp.engine.gates import load_mesh
+
+    path = tmp_path / "part.stl"
+    code = f"from build123d import *\nexport_stl({shape}, {str(path)!r})\n"
+    subprocess.run([os.environ["CADCLAMP_SANDBOX_PYTHON"], "-c", code], check=True)
+    mesh = load_mesh(path)
+    assert mesh.is_watertight and mesh.is_winding_consistent

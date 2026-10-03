@@ -16,6 +16,12 @@ def load_mesh(path: str | Path) -> trimesh.Trimesh:
     # STL is unwelded triangle soup; without merging, every manifoldness
     # check fails spuriously on duplicate vertices.
     mesh.merge_vertices()
+    # Merging can collapse a sliver to a face that repeats a vertex: OCCT
+    # tessellates a sphere's pole that way. The face has no area, but it
+    # leaves one open and one non-manifold edge, so every part with a
+    # spherical surface read as not watertight (engine 0.2.3).
+    f = mesh.faces
+    mesh.update_faces((f[:, 0] != f[:, 1]) & (f[:, 1] != f[:, 2]) & (f[:, 0] != f[:, 2]))
     return orient_outward(mesh)
 
 
